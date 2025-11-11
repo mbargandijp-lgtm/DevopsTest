@@ -26,17 +26,18 @@ pipeline {
                 sh 'mvn clean package'
             }
         }
-
+        
         // --- NOUVELLE ÉTAPE 1 : ANALYSE SONARQUBE ---
         stage('SonarQube Analysis') {
             steps {
                 echo "Lancement de l'analyse SonarQube via Maven..."
-
-                // Exécute l'analyse SonarQube.
-                // -Dsonar.login : Référence l'identifiant (Secret Text) configuré avec l'ID 'sonar-token'
-                // Le serveur SonarQube à utiliser est défini par 'withSonarQubeEnv' ('SonarQubeServer')
+                
+                // Le bloc withSonarQubeEnv expose automatiquement le token 'sonar-token'
+                // dans la variable d'environnement 'SONAR_AUTH_TOKEN' si le Secret Text est correctement lié
+                // dans la configuration du serveur Jenkins.
                 withSonarQubeEnv('SonarQubeServer') {
-                    sh 'mvn sonar:sonar -Dsonar.login=${sonar-token} -Dsonar.projectKey=mon-projet-devops-ci-cd'
+                    // Utilisation de SONAR_AUTH_TOKEN pour le login (plus robuste)
+                    sh 'mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dsonar.projectKey=mon-projet-devops-ci-cd'
                 }
             }
         }
