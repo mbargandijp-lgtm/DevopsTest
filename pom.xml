@@ -8,41 +8,34 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Angular Frontend with Maven</name>
-    <description>Uses Maven to manage Node/NPM for Angular build process.</description>
-
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        
-        <!-- Versions de Node.js et NPM qui seront téléchargées par le plugin -->
-        <node.version>v20.10.0</node.version>
+        <!-- CHANGEMENT CRITIQUE : Passe à une version Node.js compatible (v20.19.0 ou supérieure) -->
+        <node.version>v20.19.0</node.version>
         <npm.version>10.2.3</npm.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <build>
         <plugins>
             <!-- ********* FRONT-END PLUGIN ********* -->
-            <!-- Ce plugin télécharge Node/NPM et exécute les commandes Angular -->
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
                 <version>1.12.1</version> 
                 <configuration>
-                    <!-- Répertoire où les outils Node/npm seront téléchargés -->
                     <installDirectory>target</installDirectory>
                     <nodeVersion>${node.version}</nodeVersion>
                     <npmVersion>${npm.version}</npmVersion>
                 </configuration>
                 <executions>
+                    <!-- 1. Télécharge Node.js et NPM dans le répertoire target -->
                     <execution>
                         <id>install node and npm</id>
                         <goals>
                             <goal>install-node-and-npm</goal>
                         </goals>
-                        <!-- Étape : initialize -->
                     </execution>
+                    <!-- 2. Exécute npm ci (Installation des dépendances) -->
                     <execution>
                         <id>npm install</id>
                         <goals>
@@ -51,41 +44,15 @@
                         <configuration>
                             <arguments>ci</arguments>
                         </configuration>
-                        <!-- Étape : generate-resources -->
                     </execution>
+                    <!-- 3. Exécute ng build (Compilation Angular) -->
                     <execution>
                         <id>npm run build</id>
                         <goals>
                             <goal>npm</goal>
                         </goals>
                         <configuration>
-                            <!-- Commande Angular CLI pour le build de production -->
                             <arguments>run build -- --configuration=production</arguments>
-                        </configuration>
-                        <!-- Étape : compile -->
-                    </execution>
-                </executions>
-            </plugin>
-            
-            <!-- Plugin pour copier les artifacts Angular dans le JAR/WAR final (optionnel) -->
-            <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.2.0</version>
-                <executions>
-                    <execution>
-                        <id>copy-resources</id>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${basedir}/target/classes/static</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <!-- Ce chemin est le dossier de sortie de 'ng build' -->
-                                    <directory>dist/mini-jenkins-angular</directory> 
-                                </resource>
-                            </resources>
                         </configuration>
                     </execution>
                 </executions>
