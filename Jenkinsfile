@@ -1,101 +1,102 @@
+//
+// Pipeline DevOps complet pour une application Angular, intégrant :
+// 1. Installation des dépendances (npm)
+// 2. Build Angular (ng build)
+// 3. Analyse de qualité (SonarQube)
+// 4. Construction et Push de l'image Docker
+// 5. Déploiement du conteneur
+//
+
 pipeline {
+    // Exécuté sur n'importe quel agent disponible (votre VM Vagrant ou Docker Container)
     agent any
 
+    // Définition des outils nécessaires (Node.js et, si besoin, Maven pour SonarQube)
+    tools {
+        // Le nom 'nodejs_tool' DOIT correspondre au nom configuré dans
+        // Gérer Jenkins > Outils Globaux > Installations NodeJS
+        nodejs 'nodejs_tool'
+        // Si vous utilisez le scanner SonarQube basé sur Maven:
+        // maven 'Maven 3.8.4'
+    }
+
     stages {
-        stage('Verification Initiale') {
+
+        stage('Verification Initiale & Setup') {
             steps {
                 echo "Hello World! Le pipeline commence bien."
+                // Vérification du clonage réussi par la configuration du job
             }
         }
 
-        stage('GIT Clone') {
+        // Nous avons supprimé le 'stage('GIT Clone')' explicite car il était redondant et échouait.
+
+        stage('Install Dependencies') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/mbargandijp-lgtm/test DevOps.git',
-                    credentialsId: 'jenkins-git'
+                echo 'Installation des dépendances npm...'
+                // npm ci (Clean Install) est plus rapide et fiable pour la CI que npm install
+                sh 'npm ci'
             }
         }
 
         stage('Angular Build') {
             steps {
-                sh 'npm install'
-                sh 'npm run build --prod'
+                echo 'Construction du projet Angular en mode production...'
+                // La commande moderne (Angular 12+) utilise 'ng build' sans --prod
+                sh 'ng build --configuration=production'
             }
         }
 
         stage('Archivage Artifact') {
             steps {
+                echo 'Archivage des fichiers de build pour la distribution...'
+                // Assurez-vous que 'mini-jenkins-angular' est le nom du dossier créé par 'ng build'
                 archiveArtifacts artifacts: 'dist/mini-jenkins-angular/**', onlyIfSuccessful: true
             }
         }
 
        stage('SonarQube Analysis') {
             steps {
+                echo 'Démarrage de l analyse SonarQube...'
+                // L'environnement SonarQube doit être configuré dans Jenkins
                 withSonarQubeEnv('SonarQube Local') {
-                    // Ceci récupère le secret 'sonarqube-token' et le met dans la variable SONAR_TOKEN
+                    // Les identifiants 'sonartoken' doivent exister dans Jenkins (Settings > Credentials)
                     withCredentials([string(credentialsId: 'sonartoken', variable: 'SONAR_TOKEN')]) {
-                        // On passe le jeton au scanner Maven (résout l'erreur Not authorized)
-                        sh "mvn sonar:sonar -Dsonar.token=${SONAR_TOKEN}"
+                        // Utilisation du scanner SonarQube pour Node.js/Angular
+                        // Assurez-vous que 'sonar-scanner' est accessible ou utilisez un outil comme Maven/NPM si configuré
+                        sh "npm install -g sonar-scanner"
+                        sh "sonar-scanner -Dsonar.token=${SONAR_TOKEN}"
+
+                        // Si vous préférez Maven (dépend des outils configurés)
+                        // sh "mvn sonar:sonar -Dsonar.token=${SONAR_TOKEN}"
                     }
                 }
             }
         }
 
-        // ... stage SonarQube Analysis ...
-
-        stage('Docker Build') {
+        stage('Docker Construction') {
             steps {
-                // Construit l'image Docker en utilisant le Dockerfile à la racine
-                // ATTENTION: VOTRE_ID_DOCKER par votre nom d'utilisateur Docker Hub
-                sh 'docker build -t stagiaire007/mini-jenkins-angular:1.0 . --no-cache'
+                echo 'Construction de l image Docker pour le déploiement...'
+                // L'image sera taguée avec votre nom d'utilisateur Docker Hub
+                // ATTENTION : Remplacer stagiaire007 par votre VRAI ID Docker Hub.
+                sh 'docker build -t stagiaire007/mini-jenkins-angular:1.0 .'
             }
         }
-/*
-
-          // NOUVEAU STAGE A : Scan de Secrets (Gitleaks)
-
-
-        stage('Secrets Scan (Gitleaks)') {
-            steps {
-                echo "Recherche de secrets exposés dans le dépôt Git..."
-                // Scanner le répertoire de travail ($PWD)
-                // Le pipeline échoue (exit code 1) si Gitleaks trouve des secrets.
-                sh 'gitleaks detect --source=$PWD --exit-code 1 --config=.gitleaks.toml --redact'
-            }
-        }
-
-
-//
-
-        //NOUVEAU STAGE B : Scan d'Image (Trivy - SCA/Docker Scan)
-
-        stage('Security Scan (Trivy)') {
-            steps {
-                echo "Démarrage de l'analyse de vulnérabilités pour l'image stagiaire007/mini-jenkins-angular:1.0"
-
-                // Définir des règles de blocage [cite: 20]
-                // Le pipeline échoue (exit code 1) si des vulnérabilités CRITICAL ou HIGH sont trouvées[cite: 20].
-                sh 'trivy image --exit-code 1 --severity CRITICAL,HIGH stagiaire007/mini-jenkins-angular:1.0'
-            }
-        }
-
-
-        // ... stage Docker Push ...
-
 
         stage('Docker Push') {
             steps {
-                // 🔑 Étape d'authentification Docker Hub
+                echo 'Authentification et Push de l image vers Docker Hub...'
+                // L'identifiant 'docker-hub-credentials' doit exister dans Jenkins
                 withCredentials([usernamePassword(
-                    credentialsId: 'docker-hub-credentials', // ⬅️ L'ID de l'identifiant créé ci-dessus
+                    credentialsId: 'docker-hub-credentials',
                     usernameVariable: 'DOCKER_USERNAME',
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
-                    // 1. Se connecter à Docker Hub en utilisant le PAT comme mot de passe
+                    // 1. Se connecter à Docker Hub
                     sh "docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}"
 
                     // 2. Pousser l'image
-                    sh 'docker push kerenmputu2209/mini-jenkins-angular:1.0'
+                    sh 'docker push stagiaire007/mini-jenkins-angular:1.0'
                 }
             }
         }
@@ -103,33 +104,19 @@ pipeline {
         stage('Deployment') {
             steps {
                 sh '''
-                    echo "Arrêt de l'ancien conteneur..."
+                    echo "Arrêt de l ancien conteneur..."
                     docker stop mini-jenkins-angular || true
 
-                    echo "Suppression de l'ancien conteneur..."
+                    echo "Suppression de l ancien conteneur..."
                     docker rm mini-jenkins-angular || true
 
-                    # COMMANDE CORRIGÉE : Tout sur une seule ligne
                     echo "Démarrage du nouveau conteneur sur le port 8081..."
-                    docker run -d -p 8081:80 --name mini-jenkins-angular kerenmputu2209/mini-jenkins-angular:1.0
+                    // Le conteneur doit être déployé sur le serveur où Jenkins est capable d'exécuter Docker
+                    docker run -d -p 8081:80 --name mini-jenkins-angular stagiaire007/mini-jenkins-angular:1.0
 
                     echo "Déploiement terminé. Application accessible sur le port 8081 de la machine Jenkins."
                 '''
             }
         }
-
-      stage('Dynamic Scan (DAST)') {
-            steps {
-                echo "Démarrage du scan dynamique sur l'application déployée sur http://localhost:8081"
-
-                // Cette commande est un marqueur de position.
-                // Pour la valider, vous devez installer et configurer un outil DAST.
-                sh 'echo "Simulating DAST scan on running application..." && sleep 5'
-                // Si vous avez ZAP CLI installé, vous pouvez utiliser :
-                // sh 'owasp-zap-cli scan --target http://localhost:8081'
-            }
-        }
-  */
-
     }
 }
