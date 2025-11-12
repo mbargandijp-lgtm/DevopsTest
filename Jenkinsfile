@@ -1,19 +1,14 @@
 pipeline {
     agent any
     
-    // Déclaration des outils
-    tools {
-        // Le nom doit correspondre à votre configuration Maven dans Gérer Jenkins -> Global Tool Configuration
-        maven 'M3' 
-    }
+    // La section tools est retirée car l'outil 'M3' n'était pas configuré.
+    // L'agent utilise donc l'installation Maven disponible dans son PATH.
 
-    // Déclaration des variables d'environnement
     environment {
-        // Clé du projet SonarQube (DOIT correspondre à l'identifiant que vous utilisez)
+        // Clé du projet SonarQube
         SONAR_PROJECT_KEY = 'mon-projet-devops-ci-cd'
         
-        // Nom de l'identifiant Jenkins de type "Secret text" qui contient le jeton SonarQube
-        // Doit correspondre à l'ID créé : 'SonarQube API Token for Jenkins CI'
+        // Nom de l'identifiant secret Jenkins (doit être un token admin/créateur de projet)
         SONAR_TOKEN_CREDENTIAL_ID = 'SonarQube API Token for Jenkins CI' 
         
         // Nom du serveur SonarQube configuré dans Gérer Jenkins -> Configurer le Système
@@ -30,8 +25,7 @@ pipeline {
 
         stage('2. Maven Build & Package') {
             steps {
-                echo "Exécution de 'mvn clean package' pour compiler le projet Angular et créer l'artefact JAR..."
-                // Cette commande exécute le cycle de vie Maven, incluant la compilation Angular via le plugin frontend-maven-plugin.
+                echo "Exécution de 'mvn clean package' pour compiler le projet Angular..."
                 sh 'mvn clean package'
             }
         }
@@ -39,12 +33,12 @@ pipeline {
         stage('3. SonarQube Analysis') {
             steps {
                 echo "Lancement de l'analyse statique du code..."
-                // 1. Injecte l'URL du serveur SonarQube
+                // Utilise SONAR_SERVER_NAME pour établir la connexion et injecter l'URL
                 withSonarQubeEnv(SONAR_SERVER_NAME) {
-                    // 2. Récupère le jeton secret de Jenkins et l'injecte dans la variable SONAR_AUTH_TOKEN
+                    // Récupère le jeton secret de Jenkins
                     withCredentials([string(credentialsId: env.SONAR_TOKEN_CREDENTIAL_ID, variable: 'SONAR_AUTH_TOKEN')]) {
                         sh """
-                            # Commande d'analyse utilisant le jeton injecté (plus sécurisé et moderne que -Dsonar.login)
+                            # Utilisation du jeton injecté et du paramètre moderne -Dsonar.token
                             mvn sonar:sonar \\
                                 -Dsonar.token=\$SONAR_AUTH_TOKEN \\
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
@@ -64,15 +58,16 @@ pipeline {
             steps {
                 echo "Attente que l'analyse SonarQube soit traitée et que la Quality Gate soit validée..."
                 timeout(time: 1, unit: 'HOURS') {
-                    // CORRECTION : Utiliser le paramètre 'tool' au lieu de 'toolName'
-                    waitForQualityGate abortPipeline: true, tool: env.SONAR_SERVER_NAME 
+                    // CORRECTION FINALE : Seul le paramètre abortPipeline est conservé.
+                    // Le serveur est implicite grâce à withSonarQubeEnv au-dessus.
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
         
         stage('5. Archivage Artifact') {
             steps {
-                echo "Archivage de l'artefact (mini-jenkins-angular.jar) si la Quality Gate est verte..."
+                echo "Archivage de l'artefact JAR final..."
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
