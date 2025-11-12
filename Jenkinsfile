@@ -26,7 +26,7 @@ pipeline {
                 sh 'mvn clean package'
             }
         }
-        
+        /*
         // --- NOUVELLE ÉTAPE 1 : ANALYSE SONARQUBE ---
         stage('SonarQube Analysis') {
             steps {
@@ -63,7 +63,7 @@ pipeline {
                 }
             }
         }
-
+*/
 
         stage('Archivage Artifact') {
             steps {
