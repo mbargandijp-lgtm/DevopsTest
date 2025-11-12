@@ -30,14 +30,25 @@ pipeline {
         // --- NOUVELLE ÉTAPE 1 : ANALYSE SONARQUBE ---
         stage('SonarQube Analysis') {
             steps {
-                echo "Lancement de l'analyse SonarQube via Maven..."
+                echo "Lancement de l'analyse SonarQube via Maven avec propriétés Angular/TS..."
                 
                 // Le bloc withSonarQubeEnv expose automatiquement le token 'sonar-token'
                 // dans la variable d'environnement 'SONAR_AUTH_TOKEN' si le Secret Text est correctement lié
                 // dans la configuration du serveur Jenkins.
                 withSonarQubeEnv('SonarQubeServer') {
-                    // Utilisation de SONAR_AUTH_TOKEN pour le login (plus robuste)
-                    sh 'mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dsonar.projectKey=mon-projet-devops-ci-cd'
+                    // Utilisation de ${SONAR_AUTH_TOKEN} (variable injectée par withSonarQubeEnv) pour le login
+                    // Ajout des propriétés spécifiques à l'analyse TypeScript/Angular.
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.login=${SONAR_AUTH_TOKEN} \
+                        -Dsonar.projectKey=mon-projet-devops-ci-cd \
+                        -Dsonar.sources=src \
+                        -Dsonar.exclusions=**/node_modules/**,**/*.spec.ts,**/dist/**,**/e2e/** \
+                        -Dsonar.tests=src \
+                        -Dsonar.test.inclusions=**/*.spec.ts \
+                        -Dsonar.typescript.tsconfigPath=tsconfig.json \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                    '''
                 }
             }
         }
