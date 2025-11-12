@@ -3,57 +3,56 @@ pipeline {
     
     // Déclaration des outils
     tools {
-        maven 'M3' // Assurez-vous que c'est le nom de votre configuration Maven dans Gérer Jenkins
+        // Le nom doit correspondre à votre configuration Maven dans Gérer Jenkins -> Global Tool Configuration
+        maven 'M3' 
     }
 
-    // Déclaration des variables d'environnement pour le projet SonarQube
+    // Déclaration des variables d'environnement
     environment {
-        // La clé du projet SonarQube
+        // Clé du projet SonarQube (DOIT correspondre à l'identifiant que vous utilisez)
         SONAR_PROJECT_KEY = 'mon-projet-devops-ci-cd'
-        // Le nom du credential Jenkins qui contient le Jeton SonarQube (le secret sera masqué)
-        SONAR_TOKEN_CREDENTIAL_ID = 'jeton sonar' // C'est le nom du credential que vous utilisez (voir votre image)
-        // L'URL du serveur SonarQube (Utilise l'adresse IP si configurée dans "Gérer Jenkins -> Configurer le Système")
+        
+        // Nom de l'identifiant Jenkins de type "Secret text" qui contient le jeton SonarQube
+        // Doit correspondre à l'ID créé : 'SonarQube API Token for Jenkins CI'
+        SONAR_TOKEN_CREDENTIAL_ID = 'SonarQube API Token for Jenkins CI' 
+        
+        // Nom du serveur SonarQube configuré dans Gérer Jenkins -> Configurer le Système
         SONAR_SERVER_NAME = 'SonarQubeServer'
     }
 
     stages {
-        stage('Declarative: Checkout SCM') {
+        stage('1. Checkout SCM') {
             steps {
+                echo "Clonage du code depuis le dépôt Git..."
                 checkout scm
             }
         }
 
-        stage('Verification Initiale & Setup') {
+        stage('2. Maven Build & Package') {
             steps {
-                echo "Démarrage du pipeline. Le code a été cloné avec succès et l'environnement Maven est prêt."
-            }
-        }
-        
-        stage('Maven Build (Angular + Package)') {
-            steps {
-                echo "Exécution de Maven: installation des dépendances et compilation Angular..."
-                // Nettoyage, installation des dépendances Node/NPM, et compilation Angular
+                echo "Exécution de 'mvn clean package' pour compiler le projet Angular et créer l'artefact JAR..."
+                // Cette commande exécute le cycle de vie Maven, incluant la compilation Angular via le plugin frontend-maven-plugin.
                 sh 'mvn clean package'
             }
         }
         
-        stage('SonarQube Analysis') {
-            // Utilise withSonarQubeEnv pour injecter l'URL du serveur, mais on ajoute le token explicite dans la commande
+        stage('3. SonarQube Analysis') {
             steps {
-                echo "Lancement de l'analyse SonarQube via Maven avec propriétés Angular/TS..."
+                echo "Lancement de l'analyse statique du code..."
+                // 1. Injecte l'URL du serveur SonarQube
                 withSonarQubeEnv(SONAR_SERVER_NAME) {
-                    // Récupère le secret du token depuis le credential stocké dans Jenkins
-                    // et l'utilise explicitement dans la commande.
-                    withCredentials([string(credentialsId: env.SONAR_TOKEN_CREDENTIAL_ID, variable: 'SONAR_LOGIN_TOKEN')]) {
+                    // 2. Récupère le jeton secret de Jenkins et l'injecte dans la variable SONAR_AUTH_TOKEN
+                    withCredentials([string(credentialsId: env.SONAR_TOKEN_CREDENTIAL_ID, variable: 'SONAR_AUTH_TOKEN')]) {
                         sh """
-                            mvn sonar:sonar \
-                                -Dsonar.login=$SONAR_LOGIN_TOKEN \
-                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                -Dsonar.sources=src \
-                                -Dsonar.exclusions=**/node_modules/**,**/*.spec.ts,**/dist/**,**/e2e/** \
-                                -Dsonar.tests=src \
-                                -Dsonar.test.inclusions=**/*.spec.ts \
-                                -Dsonar.typescript.tsconfigPath=tsconfig.json \
+                            # Commande d'analyse utilisant le jeton injecté (plus sécurisé et moderne que -Dsonar.login)
+                            mvn sonar:sonar \\
+                                -Dsonar.token=\$SONAR_AUTH_TOKEN \\
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
+                                -Dsonar.sources=src \\
+                                -Dsonar.exclusions=**/node_modules/**,**/*.spec.ts,**/dist/**,**/e2e/** \\
+                                -Dsonar.tests=src \\
+                                -Dsonar.test.inclusions=**/*.spec.ts \\
+                                -Dsonar.typescript.tsconfigPath=tsconfig.json \\
                                 -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                         """
                     }
@@ -61,21 +60,20 @@ pipeline {
             }
         }
 
-        // Ces étapes sont généralement exécutées après la Quality Gate Check
-        stage('Quality Gate Check') {
+        stage('4. Quality Gate Check') {
             steps {
-                // Attendre le résultat de l'analyse SonarQube (vérifie la Quality Gate)
-                // Le timeout de 1 heure est généralement suffisant
+                echo "Attente que l'analyse SonarQube soit traitée et que la Quality Gate soit validée..."
+                // Met en pause le pipeline jusqu'à ce que SonarQube réponde
                 timeout(time: 1, unit: 'HOURS') {
-                    // Utilise le nom du serveur SonarQube configuré
+                    // Si la Quality Gate échoue, le pipeline est abandonné (abortPipeline: true)
                     waitForQualityGate abortPipeline: true, toolName: env.SONAR_SERVER_NAME
                 }
             }
         }
         
-        stage('Archivage Artifact') {
+        stage('5. Archivage Artifact') {
             steps {
-                echo "Archivage de l'artefact (mini-jenkins-angular.jar)..."
+                echo "Archivage de l'artefact (mini-jenkins-angular.jar) si la Quality Gate est verte..."
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
