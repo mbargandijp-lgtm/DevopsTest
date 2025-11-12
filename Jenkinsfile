@@ -63,10 +63,9 @@ pipeline {
         stage('4. Quality Gate Check') {
             steps {
                 echo "Attente que l'analyse SonarQube soit traitée et que la Quality Gate soit validée..."
-                // Met en pause le pipeline jusqu'à ce que SonarQube réponde
                 timeout(time: 1, unit: 'HOURS') {
-                    // Si la Quality Gate échoue, le pipeline est abandonné (abortPipeline: true)
-                    waitForQualityGate abortPipeline: true, toolName: env.SONAR_SERVER_NAME
+                    // CORRECTION : Utiliser le paramètre 'tool' au lieu de 'toolName'
+                    waitForQualityGate abortPipeline: true, tool: env.SONAR_SERVER_NAME 
                 }
             }
         }
