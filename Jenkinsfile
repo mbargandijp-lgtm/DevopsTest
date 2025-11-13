@@ -5,14 +5,14 @@ pipeline {
     // L'agent utilise donc l'installation Maven disponible dans son PATH.
 
     environment {
-        // Clé du projet SonarQube
+        // Variables SonarQube
         SONAR_PROJECT_KEY = 'mon-projet-devops-ci-cd'
-        
-        // Nom de l'identifiant secret Jenkins (doit être un token admin/créateur de projet)
         SONAR_TOKEN_CREDENTIAL_ID = 'SonarQube API Token for Jenkins CI' 
-        
-        // Nom du serveur SonarQube configuré dans Gérer Jenkins -> Configurer le Système
         SONAR_SERVER_NAME = 'SonarQubeServer'
+
+        // NOUVELLE VARIABLE DOCKER
+        // Nom de l'image Docker (Ex: mon_registre/mon_application)
+        DOCKER_IMAGE_NAME = 'mini-jenkins-angular' 
     }
 
     stages {
@@ -58,7 +58,6 @@ pipeline {
             steps {
                 echo "Attente que l'analyse SonarQube soit traitée et que la Quality Gate soit validée..."
                 timeout(time: 1, unit: 'HOURS') {
-                    // CORRECTION FINALE : Seul le paramètre abortPipeline est conservé.
                     // Le serveur est implicite grâce à withSonarQubeEnv au-dessus.
                     waitForQualityGate abortPipeline: true
                 }
@@ -69,6 +68,33 @@ pipeline {
             steps {
                 echo "Archivage de l'artefact JAR final..."
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+        
+        // NOUVELLE ÉTAPE 6: Création de l'image Docker
+        stage('6. Build Docker Image') {
+            steps {
+                echo "Construction de l'image Docker pour l'application..."
+                // Utilise l'ID du build Jenkins (BUILD_NUMBER) comme tag de l'image
+                sh "docker build -t ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ."
+            }
+        }
+
+        // NOUVELLE ÉTAPE 7: Push de l'image Docker (Déploiement vers un registre)
+        stage('7. Push Docker Image') {
+            steps {
+                echo "Tagging et Push de l'image vers le registre (nécessite l'accès à Docker Hub/Registry)"
+                
+                // Tag 'latest'
+                sh "docker tag ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ${DOCKER_IMAGE_NAME}:latest"
+                
+                // Si vous aviez des identifiants (registry.hub.docker.com par exemple)
+                // Vous utiliseriez 'withCredentials' ici pour le 'docker push' sécurisé.
+                // sh "docker push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
+                // sh "docker push ${DOCKER_IMAGE_NAME}:latest"
+
+                echo "Image créée et taguée : ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} et ${DOCKER_IMAGE_NAME}:latest"
+                echo "NOTE: L'étape de PUSH réelle est commentée. Décommenter pour un registre réel."
             }
         }
     }
