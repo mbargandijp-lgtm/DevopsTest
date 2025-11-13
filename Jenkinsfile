@@ -1,6 +1,6 @@
 pipeline {
     agent any
-    
+    //
     environment {
         // Variables SonarQube
         SONAR_PROJECT_KEY = 'mon-projet-devops-ci-cd'
@@ -71,7 +71,7 @@ pipeline {
             }
         }
 
-        // ÉTAPE 7: Push de l'image Docker
+        // 
         stage('7. Push Docker Image') {
             steps {
                 echo "Tagging et Push de l'image vers le registre (nécessite l'accès à Docker Hub/Registry)"
