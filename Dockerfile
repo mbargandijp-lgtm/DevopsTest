@@ -1,15 +1,21 @@
-# 1. Image de base pour l'étape de construction (utilisée pour build Angular si ce n'était pas fait dans Jenkins)
-# Puisque le build Angular est fait dans Jenkins, on passe directement à l'étape finale.
+# Dockerfile pour l'application Angular packagée en JAR
+# --------------------------------------------------
 
-# 2. Utilisation d'une image Nginx pour servir l'application statique
-FROM nginx:alpine
+# ÉTAPE 1: Image de base pour exécuter le JAR (ici OpenJDK)
+FROM openjdk:17-jdk-slim
 
-# Copie le contenu du build Angular généré par Jenkins (dans le stage précédent)
-# L'application est servie par défaut à cet emplacement par Nginx
-COPY /dist/mini-jenkins-angular /usr/share/nginx/html
+# Configuration de l'environnement
+ENV APP_NAME=mini-jenkins-angular.jar
 
-# Expose le port par défaut de Nginx
-EXPOSE 80
+# Définir le répertoire de travail dans le conteneur
+WORKDIR /app
 
-# Commande par défaut de Nginx (qui démarre le serveur)
-CMD ["nginx", "-g", "daemon off;"]
+# Copier l'artefact JAR final généré par Maven (présent dans target/ après l'étape 2)
+# Nous supposons que le JAR s'appelle 'mini-jenkins-angular.jar'
+COPY target/${APP_NAME} /app/
+
+# Port d'écoute par défaut de l'application (à ajuster si nécessaire)
+EXPOSE 8080
+
+# Commande d'exécution de l'application
+CMD ["java", "-jar", "${APP_NAME}"]
