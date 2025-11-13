@@ -1,9 +1,6 @@
 pipeline {
     agent any
     
-    // La section tools est retirée car l'outil 'M3' n'était pas configuré.
-    // L'agent utilise donc l'installation Maven disponible dans son PATH.
-
     environment {
         // Variables SonarQube
         SONAR_PROJECT_KEY = 'mon-projet-devops-ci-cd'
@@ -11,18 +8,11 @@ pipeline {
         SONAR_SERVER_NAME = 'SonarQubeServer'
 
         // NOUVELLE VARIABLE DOCKER
-        // Nom de l'image Docker (Ex: mon_registre/mon_application)
         DOCKER_IMAGE_NAME = 'mini-jenkins-angular' 
     }
 
     stages {
-        stage('1. Checkout SCM') {
-            steps {
-                echo "Clonage du code depuis le dépôt Git..."
-                checkout scm
-            }
-        }
-
+        stage('1. Checkout SCM') { steps { echo "Clonage du code depuis le dépôt Git..."; checkout scm } }
         stage('2. Maven Build & Package') {
             steps {
                 echo "Exécution de 'mvn clean package' pour compiler le projet Angular..."
@@ -33,9 +23,7 @@ pipeline {
         stage('3. SonarQube Analysis') {
             steps {
                 echo "Lancement de l'analyse statique du code..."
-                // Utilise SONAR_SERVER_NAME pour établir la connexion et injecter l'URL
                 withSonarQubeEnv(SONAR_SERVER_NAME) {
-                    // Récupère le jeton secret de Jenkins
                     withCredentials([string(credentialsId: env.SONAR_TOKEN_CREDENTIAL_ID, variable: 'SONAR_AUTH_TOKEN')]) {
                         sh """
                             # Utilisation du jeton injecté et du paramètre moderne -Dsonar.token
@@ -57,8 +45,8 @@ pipeline {
         stage('4. Quality Gate Check') {
             steps {
                 echo "Attente que l'analyse SonarQube soit traitée et que la Quality Gate soit validée..."
-                timeout(time: 1, unit: 'HOURS') {
-                    // Le serveur est implicite grâce à withSonarQubeEnv au-dessus.
+                // TIMEOUT RÉDUIT À 10 MINUTES
+                timeout(time: 10, unit: 'MINUTES') { 
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -71,7 +59,7 @@ pipeline {
             }
         }
         
-        // NOUVELLE ÉTAPE 6: Création de l'image Docker
+        // ÉTAPE 6: Création de l'image Docker
         stage('6. Build Docker Image') {
             steps {
                 echo "Construction de l'image Docker pour l'application..."
@@ -80,21 +68,13 @@ pipeline {
             }
         }
 
-        // NOUVELLE ÉTAPE 7: Push de l'image Docker (Déploiement vers un registre)
+        // ÉTAPE 7: Push de l'image Docker
         stage('7. Push Docker Image') {
             steps {
                 echo "Tagging et Push de l'image vers le registre (nécessite l'accès à Docker Hub/Registry)"
-                
-                // Tag 'latest'
                 sh "docker tag ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} ${DOCKER_IMAGE_NAME}:latest"
-                
-                // Si vous aviez des identifiants (registry.hub.docker.com par exemple)
-                // Vous utiliseriez 'withCredentials' ici pour le 'docker push' sécurisé.
-                // sh "docker push ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER}"
-                // sh "docker push ${DOCKER_IMAGE_NAME}:latest"
-
                 echo "Image créée et taguée : ${DOCKER_IMAGE_NAME}:${BUILD_NUMBER} et ${DOCKER_IMAGE_NAME}:latest"
-                echo "NOTE: L'étape de PUSH réelle est commentée. Décommenter pour un registre réel."
+                echo "NOTE: L'étape de PUSH réelle est commentée dans le code Groovy sh."
             }
         }
     }
